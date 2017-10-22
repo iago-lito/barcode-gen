@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
 import numpy as np
+# for grouping successive similar bits together
+# https://stackoverflow.com/a/34444401/3719101
+from itertools import groupby
 
 class Code(UserString, str):
     """our python view on a EAN13 'code': a serie of bits stored as
@@ -122,6 +125,75 @@ class EAN13Data(object):
     structure = {i: 'n{}cCCCCCCn'.format(v) for i, v in structure.items()}
 
 
+class XY(np.ndarray):
+    """Hold coordinates with convenience operators :P
+
+    >>> a = XY(1., 5.)
+    >>> a
+    XY(1.0, 5.0)
+    >>> (a.x, a.y)
+    (1.0, 5.0)
+    >>> a.x *= 2
+    >>> a
+    XY(2.0, 5.0)
+    >>> # and all common np.ndarray operators ;)
+    >>> a + a
+    XY(2.0, 10.0)
+    >>> a = WH(1., 5.) # alias
+    >>> a
+    XY(1.0, 5.0)
+    >>> (a.w, a.h)
+    (1.0, 5.0)
+    """
+
+    def __new__(self, x, y):
+        return np.ndarray.__new__(self, shape=2, dtype=float)
+
+    def __init__(self, x, y):
+        self[0] = x
+        self[1] = y
+
+    def __repr__(self):
+        return "XY({}, {})".format(self.x, self.y)
+
+    @property
+    def x(self):
+        return self[0]
+
+    @x.setter
+    def x(self, value):
+        self[0] = value
+
+    @property
+    def y(self):
+        return self[1]
+
+    @y.setter
+    def y(self, value):
+        self[1] = value
+
+    @property
+    def w(self):
+        return self.x
+
+    @w.setter
+    def w(self, value):
+        self.x = value
+
+    @property
+    def h(self):
+        return self.y
+
+    @h.setter
+    def h(self, value):
+        self.y = value
+
+class WH(XY):
+    """alias for holding widths and heights
+    """
+    pass
+
+
 class EAN13(object):
     """Embed EAN13 code concept.. still a sandbox.
     'id': stands for the numeric [0-9]digits value of the code
@@ -208,24 +280,71 @@ class EAN13(object):
         """
         return '-'.join(self.elements)
 
+    def draw(self):
+        """sandbox: print a matplotlib version of the code :)
+        """
 
-# open new blank figure
-fig, ax = plt.subplots()
-plt.axis('off')
+        # constants
+        inch_2_mm = 25.4
+        n_bars = 2*3 + 7*12 + 5 # normal guards + elements + central guard
+        # dimensions according to
+        # http://www.gs1.fr/content/download/2694/19049/version/2/file/GS1_mes%20codes%20a%CC%80%20barres%20premiers%20pas%202016%20.pdf
+        code_size = WH(37.29, 26.26) / inch_2_mm # size of the printed code
+        before_white = 3.63 / inch_2_mm # padding white
+        after_white = 2.31  / inch_2_mm # padding white
+        full_size = WH(code_size.w + before_white + after_white, code_size.h)
+        elts_size = WH(31.55, 22.85) / inch_2_mm # all small elements
+        label_size = WH(code_size.w, code_size.h - elts_size.h) # text
+        elt_size = WH(elts_size.w / n_bars, elts_size.h) # one small bar
+        guard_size = WH(elt_size.w, .5 * (code_size.h + elts_size.h)) # guard
+        # open new blank figure
+        fig, ax = plt.subplots()
+        fig.set_size_inches(full_size)
+        plt.axis('off')
+        # arf, yes, bring all these back to [0, 1]^2
+        code_size /= full_size
+        elts_size /= full_size
+        elt_size /= full_size
+        label_size /= full_size
+        before_white /= full_size.w
+        after_white /= full_size.w
+        # read code and prepare all bars :)
+        # draw one full-code-range series of small bars (guards included)
+        # then superimpose taller guards bars :P
+        x = before_white
+        bar_width = elt_size.w
+        # iterate over grouped successive identical bits
+        g = ((i, sum(1 for _ in it)) for i, it in groupby(self.code))
+        # on the way, check whether we stand on a guard on not:
+        def guards(g):
+            seq = zip((list(elt) for elt in self.elements), self.structure)
+            elt, typ = next(seq)
+            for bit, number in g:
+                for _ in range(number):
+                    try:
+                        elt.pop(0)
+                    except IndexError:
+                        elt, typ = next(seq)
+                        elt.pop(0)
+                yield bit, number, typ
+        for bit, number, typ in guards(g):
+            width = bar_width * number
+            if typ in EAN13Data.guards:
+                height = guard_size.h
+                y = code_size.h - guard_size.h
+            else:
+                height = elts_size.h
+                y = code_size.h - elts_size.h
+            color = 'white' if bit == EAN13Data.white else 'black'
+            bar = mpatches.Rectangle(XY(x, y), width, height,
+                    ec=None, fc=color)
+            ax.add_patch(bar)
+            plt.text(x, y, typ, color='red')
+            x += width
+        # plt.savefig('test.pdf')
+        plt.show()
 
-# handle rectangles
-bars = []
-bar = mpatches.Rectangle(np.array([.1, .1]), 0.05, 0.1, ec=None, fc='black')
-bars.append(bar)
-bar = mpatches.Rectangle(np.array([.4, .2]), 0.5, 0.19, ec=None, fc='black')
-bars.append(bar)
-for bar in bars:
-    ax.add_patch(bar)
+self = EAN13(978294019961)
+self.draw()
 
-# handle text
-plt.text(.5, .8, 'yeah!', family='serif', size=20)
-
-# export and print!
-plt.savefig('test.pdf')
-plt.show()
 

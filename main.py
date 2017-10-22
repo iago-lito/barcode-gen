@@ -10,6 +10,7 @@ from collections import UserString
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
+from matplotlib.textpath import TextPath
 import numpy as np
 # for grouping successive similar bits together
 # https://stackoverflow.com/a/34444401/3719101
@@ -138,7 +139,7 @@ class XY(np.ndarray):
     XY(2.0, 5.0)
     >>> # and all common np.ndarray operators ;)
     >>> a + a
-    XY(2.0, 10.0)
+    XY(4.0, 10.0)
     >>> a = WH(1., 5.) # alias
     >>> a
     XY(1.0, 5.0)
@@ -187,6 +188,7 @@ class XY(np.ndarray):
     @h.setter
     def h(self, value):
         self.y = value
+
 
 class WH(XY):
     """alias for holding widths and heights
@@ -281,11 +283,12 @@ class EAN13(object):
         return '-'.join(self.elements)
 
     def draw(self):
-        """sandbox: print a matplotlib version of the code :)
+        """export a .pdf version of the code :)
         """
 
         # constants
         inch_2_mm = 25.4
+        inch_2_pt = 72.
         n_bars = 2*3 + 7*12 + 5 # normal guards + elements + central guard
         # dimensions according to
         # http://www.gs1.fr/content/download/2694/19049/version/2/file/GS1_mes%20codes%20a%CC%80%20barres%20premiers%20pas%202016%20.pdf
@@ -293,10 +296,13 @@ class EAN13(object):
         before_white = 3.63 / inch_2_mm # padding white
         after_white = 2.31  / inch_2_mm # padding white
         full_size = WH(code_size.w + before_white + after_white, code_size.h)
-        elts_size = WH(31.55, 22.85) / inch_2_mm # all small elements
+        elts_size = WH(31.35, 22.85) / inch_2_mm # all small elements
         label_size = WH(code_size.w, code_size.h - elts_size.h) # text
         elt_size = WH(elts_size.w / n_bars, elts_size.h) # one small bar
         guard_size = WH(elt_size.w, .5 * (code_size.h + elts_size.h)) # guard
+        # this length seems missing from the doc. make a choice: space between
+        # beginning of the first digit and the first bar:
+        shift = .075
         # open new blank figure
         fig, ax = plt.subplots()
         fig.set_size_inches(full_size)
@@ -311,7 +317,7 @@ class EAN13(object):
         # read code and prepare all bars :)
         # draw one full-code-range series of small bars (guards included)
         # then superimpose taller guards bars :P
-        x = before_white
+        x = before_white + shift
         bar_width = elt_size.w
         # iterate over grouped successive identical bits
         g = ((i, sum(1 for _ in it)) for i, it in groupby(self.code))
@@ -339,10 +345,31 @@ class EAN13(object):
             bar = mpatches.Rectangle(XY(x, y), width, height,
                     ec=None, fc=color)
             ax.add_patch(bar)
-            plt.text(x, y, typ, color='red')
             x += width
-        # plt.savefig('test.pdf')
-        plt.show()
+        # t = TextPath(.5 * XY(1, 1), self.id, size=.1)
+        # for p in t.to_polygons():
+            # p /= full_size
+            # ax.add_patch(mpatches.Polygon(p, fc='green'))
+        # add label, splat into several parts.. we need them now because one
+        shrink = .7 # shrink size coeff so that numbers do not crush ceiling
+        spacing = .0082 # horizontal spacing of digits as a `height` factor
+        first, second, third = self.id_dashed.split('-')
+        height = label_size.h * full_size.h * inch_2_pt * shrink
+        plt.text(before_white, y, first, color='black', size=height)
+        normal_guard_length = len(EAN13Data.elements['n'])
+        x = before_white + shift + normal_guard_length * bar_width
+        for digit in second:
+            plt.text(x, y, digit, color='black', size=height)
+            x += height * spacing
+        x = before_white + shift + elts_size.w - normal_guard_length*bar_width
+        for digit in reversed(third):
+            plt.text(x, y, digit, color='black', size=height, ha='right')
+            x -= height * spacing
+        # ah.. there's a kind of `>` at the end..
+        last = '>'
+        x = before_white + shift + elts_size.w + bar_width
+        plt.text(x, y, last, color='black', size=height, ha='left')
+        plt.savefig(self.id + '.pdf')
 
 self = EAN13(978294019961)
 self.draw()

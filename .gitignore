@@ -1,3 +1,6 @@
 # python stuff
 .cache/
 __pycache__/
+
+# outputs
+*.pdf

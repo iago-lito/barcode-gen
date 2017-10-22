@@ -8,7 +8,8 @@ the roadmap and the intent:
     - convert numbers to EAN13 valid, binary codes
     - export EAN13 binary codes to nice representations (ascii, svg, pdf, maybe
       more)
-    - generate random codes with or without constraints (ex: prefixes)
+    - generate random codes with or without constraints (ex: prefixes, don't
+      match any in an existing database)
 - export that API to a command line interface
 
 #### further off

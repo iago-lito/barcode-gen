@@ -6,6 +6,11 @@ strings for simplicity.
 # to subclass `str` in a lazy way
 # https://stackoverflow.com/questions/46868085/
 from collections import UserString
+# to draw and export barcodes
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.collections import PatchCollection
+import numpy as np
 
 class Code(UserString, str):
     """our python view on a EAN13 'code': a serie of bits stored as
@@ -131,6 +136,8 @@ class EAN13(object):
     10101110110001001001101100010110011101000110101010110011011101001110100101000011001101000100101
     >>> c.code_dashed
     '101-0111011-0001001-0011011-0001011-0011101-0001101-01010-1100110-1110100-1110100-1010000-1100110-1000100-101'
+    >>> c.structure
+    'nABBABAcCCCCCCn'
     """
 
     def _encode(self):
@@ -200,4 +207,25 @@ class EAN13(object):
         """for clarity, return code with dashes between each elements
         """
         return '-'.join(self.elements)
+
+
+# open new blank figure
+fig, ax = plt.subplots()
+plt.axis('off')
+
+# handle rectangles
+bars = []
+bar = mpatches.Rectangle(np.array([.1, .1]), 0.05, 0.1, ec=None, fc='black')
+bars.append(bar)
+bar = mpatches.Rectangle(np.array([.4, .2]), 0.5, 0.19, ec=None, fc='black')
+bars.append(bar)
+for bar in bars:
+    ax.add_patch(bar)
+
+# handle text
+plt.text(.5, .8, 'yeah!', family='serif', size=20)
+
+# export and print!
+plt.savefig('test.pdf')
+plt.show()
 

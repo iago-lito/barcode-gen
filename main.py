@@ -122,7 +122,10 @@ class EAN13(object):
     'id': stands for the numeric [0-9]digits value of the code
     'code': stands for its binary "bars" value [0-1]digits values
 
-    >>> c = EAN13(9782940199617)
+    >>> c = EAN13(978294019961)
+    >>> c.checksum
+    '7'
+    >>> c = EAN13(9782940199617) # allright if you already know it.
     >>> c
     EAN13:9-782940-199617
     10101110110001001001101100010110011101000110101010110011011101001110100101000011001101000100101
@@ -154,11 +157,32 @@ class EAN13(object):
         self.code = code
         self.elements = elements
 
+    def _compute_checksum(self):
+        """compute and return the checksum
+        """
+        id = [int(c) for c in self.id[0:12]]
+        hln = len(id) // 2 # half length
+        odds = [id[2 * i] for i in range(hln)]
+        evens = [id[(2 * i) + 1] for i in range(hln)]
+        checksum = 3 * sum(evens) + sum(odds)
+        checksum = 10 - (checksum % 10)
+        return str(checksum)
+
     def __init__(self, id):
         """Create and store the code, given as an int
         """
-        id = str(id).zfill(EAN13Data.length)
+        id_len = EAN13Data.length
+        id = str(id).zfill(id_len - 1)
         self.id = id
+        # if not present, compute checksum, if present, check it :)
+        cs = self._compute_checksum() # reads self.id
+        l = len(id)
+        if l < id_len:
+            self.id += cs
+        elif id[-1:] != cs:
+            raise ValueError('Wrong length or checksum !')
+        # not all wrong cases are handled, we'e all consenting adults here
+        self.checksum = cs
         self._encode() # reads self.id
 
     def __repr__(self):

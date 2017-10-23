@@ -12,9 +12,11 @@ import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
 from matplotlib.textpath import TextPath
 import numpy as np
+import numpy.random as rd
 # for grouping successive similar bits together
 # https://stackoverflow.com/a/34444401/3719101
 from itertools import groupby
+
 
 class Code(UserString, str):
     """our python view on a EAN13 'code': a serie of bits stored as
@@ -250,7 +252,7 @@ class EAN13(object):
         return str(checksum)
 
     def __init__(self, id):
-        """Create and store the code, given as an int
+        """Create and store the code, given as a string of [0-9]digits
         """
         id_len = EAN13Data.length
         id = str(id).zfill(id_len - 1)
@@ -371,7 +373,89 @@ class EAN13(object):
         plt.text(x, y, last, color='black', size=height, ha='left')
         plt.savefig(self.id + '.pdf')
 
+    @staticmethod
+    def generate(prefix, database=None):
+        """Return a random barcode with the given prefix (string of
+        digits). It is guaranteed NOT to be identical to one in the
+        given database (an iterable structure yielding barcodes)
+        """
+
+        ### sandbox
+
+        prefix = '041'
+        database = [
+                EAN13('753698456218'),
+                EAN13('026530148950'),
+                EAN13('041259863011'),
+                ]
+        pl = len(prefix)
+        # number of digits to draw
+        to_draw = EAN13Data.length - 1 - pl
+        rand = ''.join(str(i) for i in rd.randint(10, size=to_draw))
+        result = prefix + rand
+        # Check against the database. Do not draw another random one if there is
+        # a match, just step one code further until the whole loop has been
+        # done.
+
+
+        def loopstep(start, digits='abcdef'):
+            """iterate on all digit combinations (strongest left) of fixed
+            length, starting from the string given as a start, going frontwards,
+            looping, then going on forever :P
+            recursive
+            """
+            l = len(start)
+            if l == 1:
+                # loop forever on digits, starting from the first one
+                found = False # dont yield until we have found the first one
+                g = iter(digits)
+                while True:
+                    try:
+                        d = next(g)
+                    except StopIteration:
+                        g = iter(digits)
+                        d = next(g)
+                    if found:
+                        yield d
+                    elif d == start:
+                        found = True
+                        yield d
+            else:
+                first = start[0]
+                end = start[1:]
+                last = digits[-1:]
+                zero = digits[0] * (l - 1)
+                for f in loopstep(first, digits):
+                    for e in loopstep(end, digits):
+                        yield f + e
+                        if all(d == last for d in e):
+                            break
+                    end = zero
+                    continue
+
+        def loop_round(start, digits='abcdef', stop=None):
+            """Iterate with loopstep, but only until the next time we get back
+            on start.. or any stop you'd like
+            """
+            if not stop:
+                stop = start
+            g = loopstep(start, digits)
+            yield next(g)
+            for i in g:
+                if i == stop:
+                    break
+                yield i
+
+
+        for i in loop_round('bca', 'abc'):
+            print(i)
+
+        for i in loop_round('bc', 'abcde'):
+            print(i)
+
+        for i in loop_round('12', '0123456789'):
+            print(i)
+
 self = EAN13(978294019961)
 self.draw()
-
 

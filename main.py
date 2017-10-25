@@ -17,6 +17,158 @@ import numpy.random as rd
 # https://stackoverflow.com/a/34444401/3719101
 from itertools import groupby
 
+def loopstep(start, digits='0123456789'):
+    """Iterate forever on all digit combinations of fixed length
+    (strongest left), starting from the string given as a start, going
+    frontwards, looping, then going on :P
+
+    recursive
+
+    >>> g = loopstep('bcc', 'abc')
+    >>> for i in range(100):
+    ...     print(next(g)) # doctest: +NORMALIZE_WHITESPACE
+    bcc caa cab cac cba cbb cbc cca ccb ccc aaa aab aac aba abb abc aca acb acc
+    baa bab bac bba bbb bbc bca bcb bcc caa cab cac cba cbb cbc cca ccb ccc aaa
+    aab aac aba abb abc aca acb acc baa bab bac bba bbb bbc bca bcb bcc caa cab
+    cac cba cbb cbc cca ccb ccc aaa aab aac aba abb abc aca acb acc baa bab bac
+    bba bbb bbc bca bcb bcc caa cab cac cba cbb cbc cca ccb ccc aaa aab aac aba
+    abb abc aca acb acc
+    >>> g = loopstep('89', '0123456789')
+    >>> for i in range(222):
+    ...     print(next(g)) # doctest: +NORMALIZE_WHITESPACE
+    89 90 91 92 93 94 95 96 97 98 99 00 01 02 03 04 05 06 07 08 09 10 11 12 13
+    14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38
+    39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
+    64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88
+    89 90 91 92 93 94 95 96 97 98 99 00 01 02 03 04 05 06 07 08 09 10 11 12 13
+    14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38
+    39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
+    64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88
+    89 90 91 92 93 94 95 96 97 98 99 00 01 02 03 04 05 06 07 08 09 10
+    """
+    l = len(start)
+    if l == 1:
+        # loop forever on digits, starting from the first one
+        found = False # dont yield until we have found the first one
+        g = iter(digits)
+        while True:
+            try:
+                d = next(g)
+            except StopIteration:
+                g = iter(digits)
+                d = next(g)
+            if found:
+                yield d
+            elif d == start:
+                found = True
+                yield d
+    else:
+        first = start[0]
+        end = start[1:]
+        last = digits[-1:]
+        zero = digits[0] * (l - 1)
+        for f in loopstep(first, digits):
+            for e in loopstep(end, digits):
+                yield f + e
+                if all(d == last for d in e):
+                    break
+            end = zero
+            continue
+
+def loop_round(start, digits='0123456789', stop=None, include_last=False):
+    """Iterate with loopstep, but only until the next time we get back
+    on start.. or any stop you'd like
+
+    >>> for i in loop_round('ba', 'abc'):
+    ...     print(i) # doctest: +NORMALIZE_WHITESPACE
+    ba bb bc ca cb cc aa ab ac
+    >>> for i in loop_round('ba', 'abc', include_last=True):
+    ...     print(i) # doctest: +NORMALIZE_WHITESPACE
+    ba bb bc ca cb cc aa ab ac ba
+    >>> for i in loop_round('89', '0123456789', stop='13'):
+    ...     print(i) # doctest: +NORMALIZE_WHITESPACE
+    89 90 91 92 93 94 95 96 97 98 99 00 01 02 03 04 05 06 07 08 09 10 11 12
+    """
+    if not stop:
+        stop = start
+    g = loopstep(start, digits)
+    yield next(g)
+    for i in g:
+        if i == stop:
+            if include_last:
+                yield i
+            break
+        yield i
+
+class XY(np.ndarray):
+    """Hold coordinates with convenience operators :P
+
+    >>> a = XY(1., 5.)
+    >>> a
+    XY(1.0, 5.0)
+    >>> (a.x, a.y)
+    (1.0, 5.0)
+    >>> a.x *= 2
+    >>> a
+    XY(2.0, 5.0)
+    >>> # and all common np.ndarray operators ;)
+    >>> a + a
+    XY(4.0, 10.0)
+    >>> a = WH(1., 5.) # alias
+    >>> a
+    XY(1.0, 5.0)
+    >>> (a.w, a.h)
+    (1.0, 5.0)
+    """
+
+    def __new__(self, x, y):
+        return np.ndarray.__new__(self, shape=2, dtype=float)
+
+    def __init__(self, x, y):
+        self[0] = x
+        self[1] = y
+
+    def __repr__(self):
+        return "XY({}, {})".format(self.x, self.y)
+
+    @property
+    def x(self):
+        return self[0]
+
+    @x.setter
+    def x(self, value):
+        self[0] = value
+
+    @property
+    def y(self):
+        return self[1]
+
+    @y.setter
+    def y(self, value):
+        self[1] = value
+
+    @property
+    def w(self):
+        return self.x
+
+    @w.setter
+    def w(self, value):
+        self.x = value
+
+    @property
+    def h(self):
+        return self.y
+
+    @h.setter
+    def h(self, value):
+        self.y = value
+
+
+class WH(XY):
+    """alias for holding widths and heights
+    """
+    pass
+
 
 class Code(UserString, str):
     """our python view on a EAN13 'code': a serie of bits stored as
@@ -128,86 +280,16 @@ class EAN13Data(object):
     structure = {i: 'n{}cCCCCCCn'.format(v) for i, v in structure.items()}
 
 
-class XY(np.ndarray):
-    """Hold coordinates with convenience operators :P
-
-    >>> a = XY(1., 5.)
-    >>> a
-    XY(1.0, 5.0)
-    >>> (a.x, a.y)
-    (1.0, 5.0)
-    >>> a.x *= 2
-    >>> a
-    XY(2.0, 5.0)
-    >>> # and all common np.ndarray operators ;)
-    >>> a + a
-    XY(4.0, 10.0)
-    >>> a = WH(1., 5.) # alias
-    >>> a
-    XY(1.0, 5.0)
-    >>> (a.w, a.h)
-    (1.0, 5.0)
-    """
-
-    def __new__(self, x, y):
-        return np.ndarray.__new__(self, shape=2, dtype=float)
-
-    def __init__(self, x, y):
-        self[0] = x
-        self[1] = y
-
-    def __repr__(self):
-        return "XY({}, {})".format(self.x, self.y)
-
-    @property
-    def x(self):
-        return self[0]
-
-    @x.setter
-    def x(self, value):
-        self[0] = value
-
-    @property
-    def y(self):
-        return self[1]
-
-    @y.setter
-    def y(self, value):
-        self[1] = value
-
-    @property
-    def w(self):
-        return self.x
-
-    @w.setter
-    def w(self, value):
-        self.x = value
-
-    @property
-    def h(self):
-        return self.y
-
-    @h.setter
-    def h(self, value):
-        self.y = value
-
-
-class WH(XY):
-    """alias for holding widths and heights
-    """
-    pass
-
-
 class EAN13(object):
     """Embed EAN13 code concept.. still a sandbox.
     'id': stands for the numeric [0-9]digits value of the code
     'code': stands for its binary "bars" value [0-1]digits values
 
-    >>> c = EAN13(978294019961)
+    >>> c = EAN13('041259863013') # with a string or an integer
     >>> c.checksum
-    '7'
-    >>> c = EAN13(9782940199617) # allright if you already know it.
-    >>> c
+    '0'
+    >>> c = EAN13(9782940199617) # allright if you already know the checksum.
+    >>> c # doctest:
     EAN13:9-782940-199617
     10101110110001001001101100010110011101000110101010110011011101001110100101000011001101000100101
     >>> c.code_dashed
@@ -249,7 +331,7 @@ class EAN13(object):
         evens = [id[(2 * i) + 1] for i in range(hln)]
         checksum = 3 * sum(evens) + sum(odds)
         checksum = 10 - (checksum % 10)
-        return str(checksum)
+        return str(checksum % 10)
 
     def __init__(self, id):
         """Create and store the code, given as a string of [0-9]digits
@@ -372,90 +454,65 @@ class EAN13(object):
         x = before_white + shift + elts_size.w + bar_width
         plt.text(x, y, last, color='black', size=height, ha='left')
         plt.savefig(self.id + '.pdf')
+        plt.close()
 
     @staticmethod
-    def generate(prefix, database=None):
+    def generate(prefix, database=()):
         """Return a random barcode with the given prefix (string of
         digits). It is guaranteed NOT to be identical to one in the
         given database (an iterable structure yielding barcodes)
+
+        >>> rd.seed(12)
+        >>> database = [
+        ...     EAN13('753698456218'),
+        ...     EAN13('026530148950'),
+        ...     EAN13('041259863011'),
+        ...     ]
+        >>> EAN13.generate('041', database)
+        EAN13:0-416123-306149
+        10101000110011001010111100110010010011011110101010100001011100101010000110011010111001110100101
+
+        >>> database = [
+        ...     EAN13('041259863010'),
+        ...     EAN13('041259863011'),
+        ...     EAN13('041259863012'),
+        ...     EAN13('041259863013'),
+        ...     EAN13('041259863014'),
+        ...     EAN13('041259863015'),
+        ...     EAN13('041259863016'),
+        ...     EAN13('041259863017'),
+        ...     EAN13('041259863018'),
+        ...     EAN13('041259863019'),
+        ...     ]
+        >>> EAN13.generate('04125986301', database)
+        Traceback (most recent call last):
+            ...
+        Exception: Database is full!
         """
 
-        ### sandbox
-
-        prefix = '041'
-        database = [
-                EAN13('753698456218'),
-                EAN13('026530148950'),
-                EAN13('041259863011'),
-                ]
         pl = len(prefix)
+        # retrieve only ids with no checksums
+        database = [ean.id[pl:-1] for ean in database if ean.id[:pl] == prefix]
+
         # number of digits to draw
         to_draw = EAN13Data.length - 1 - pl
         rand = ''.join(str(i) for i in rd.randint(10, size=to_draw))
-        result = prefix + rand
-        # Check against the database. Do not draw another random one if there is
-        # a match, just step one code further until the whole loop has been
-        # done.
+        # Check against the database. Do not draw another random one if
+        # there is a match, just step one code further until the whole
+        # loop has been done. If it has, then there is no such free
+        # barcode anymore.
+        loop = loop_round(rand, '0123456789')
+        while rand in database:
+            try:
+                rand = next(loop)
+            except StopIteration as e:
+                raise Exception("Database is full!")
+        return EAN13(prefix + rand)
 
-
-        def loopstep(start, digits='abcdef'):
-            """iterate on all digit combinations (strongest left) of fixed
-            length, starting from the string given as a start, going frontwards,
-            looping, then going on forever :P
-            recursive
-            """
-            l = len(start)
-            if l == 1:
-                # loop forever on digits, starting from the first one
-                found = False # dont yield until we have found the first one
-                g = iter(digits)
-                while True:
-                    try:
-                        d = next(g)
-                    except StopIteration:
-                        g = iter(digits)
-                        d = next(g)
-                    if found:
-                        yield d
-                    elif d == start:
-                        found = True
-                        yield d
-            else:
-                first = start[0]
-                end = start[1:]
-                last = digits[-1:]
-                zero = digits[0] * (l - 1)
-                for f in loopstep(first, digits):
-                    for e in loopstep(end, digits):
-                        yield f + e
-                        if all(d == last for d in e):
-                            break
-                    end = zero
-                    continue
-
-        def loop_round(start, digits='abcdef', stop=None):
-            """Iterate with loopstep, but only until the next time we get back
-            on start.. or any stop you'd like
-            """
-            if not stop:
-                stop = start
-            g = loopstep(start, digits)
-            yield next(g)
-            for i in g:
-                if i == stop:
-                    break
-                yield i
-
-
-        for i in loop_round('bca', 'abc'):
-            print(i)
-
-        for i in loop_round('bc', 'abcde'):
-            print(i)
-
-        for i in loop_round('12', '0123456789'):
-            print(i)
 
 self = EAN13(978294019961)
 self.draw()
+
+for i in range(100):
+    print(EAN13.generate('041'))
 

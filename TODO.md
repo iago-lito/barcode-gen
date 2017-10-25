@@ -2,6 +2,14 @@ Okay, since we're not satisfied with what we find around, let's just have fun
 and implement another barcode generator in python. This TODO list starts with
 the roadmap and the intent:
 
+## bugs
+
+This yields pyplot warnings for some reason:
+
+    for i in range(100):
+        EAN13.generate('041').draw()
+
+
 ## roadmap
 
 - start with a plain python API

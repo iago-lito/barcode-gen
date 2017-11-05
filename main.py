@@ -16,6 +16,8 @@ import numpy.random as rd
 # for grouping successive similar bits together
 # https://stackoverflow.com/a/34444401/3719101
 from itertools import groupby
+# to compose layout from many barcode files
+import svgutils.compose as sc
 
 def loopstep(start, digits='0123456789'):
     """Iterate forever on all digit combinations of fixed length
@@ -102,6 +104,8 @@ def loop_round(start, digits='0123456789', stop=None, include_last=False):
 
 class XY(np.ndarray):
     """Hold coordinates with convenience operators :P
+    Also statically holds conversion towards and from svg standard user
+    units only: https://www.w3.org/TR/SVG/coords.html#Units
 
     >>> a = XY(1., 5.)
     >>> a
@@ -120,6 +124,11 @@ class XY(np.ndarray):
     >>> (a.w, a.h)
     (1.0, 5.0)
     """
+
+    inch = 90. # ui
+    pt = 1.25 # ui
+    mm = 3.543307 # ui
+    cm = 35.43307 # ui
 
     def __new__(self, x, y):
         return np.ndarray.__new__(self, shape=2, dtype=float)
@@ -162,7 +171,6 @@ class XY(np.ndarray):
     @h.setter
     def h(self, value):
         self.y = value
-
 
 class WH(XY):
     """alias for holding widths and heights
@@ -279,6 +287,27 @@ class EAN13Data(object):
             }
     structure = {i: 'n{}cCCCCCCn'.format(v) for i, v in structure.items()}
 
+    n_bars = 2*len(elements['n']) + len(elements['c']) \
+            + 6 * len(elements['A']['0']) \
+            + 6 * len(elements['C']['0'])
+
+    # dimensions in ui according to
+    # http://www.gs1.fr/content/download/2694/19049/version/2/file/
+    # GS1_mes%20codes%20a%CC%80%20barres%20premiers%20pas%202016%20.pdf
+    mm = XY.mm
+    code_size = WH(37.29, 26.26) * mm # size of the printed code
+    before_white = 3.63 * mm # padding white
+    after_white = 2.31 * mm # padding white
+    full_size = WH(before_white + code_size.w + after_white, code_size.h)
+    elts_size = WH(31.35, 22.85) * mm # all small elements
+    label_size = WH(code_size.w, code_size.h - elts_size.h) # text
+    elt_size = WH(elts_size.w / n_bars, elts_size.h) # one small bar
+    guard_size = WH(elt_size.w, .5 * (code_size.h + elts_size.h)) # guard
+    # this length seems missing from the doc. make a choice: space between
+    # beginning of the first digit and the first bar:
+    shift = 3 * mm
+    del mm
+
 
 class EAN13(object):
     """Embed EAN13 code concept.. still a sandbox.
@@ -370,34 +399,23 @@ class EAN13(object):
         """export a .pdf version of the code :)
         """
 
-        # constants
-        inch_2_mm = 25.4
-        inch_2_pt = 72.
-        n_bars = 2*3 + 7*12 + 5 # normal guards + elements + central guard
-        # dimensions according to
-        # http://www.gs1.fr/content/download/2694/19049/version/2/file/GS1_mes%20codes%20a%CC%80%20barres%20premiers%20pas%202016%20.pdf
-        code_size = WH(37.29, 26.26) / inch_2_mm # size of the printed code
-        before_white = 3.63 / inch_2_mm # padding white
-        after_white = 2.31  / inch_2_mm # padding white
-        full_size = WH(code_size.w + before_white + after_white, code_size.h)
-        elts_size = WH(31.35, 22.85) / inch_2_mm # all small elements
-        label_size = WH(code_size.w, code_size.h - elts_size.h) # text
-        elt_size = WH(elts_size.w / n_bars, elts_size.h) # one small bar
-        guard_size = WH(elt_size.w, .5 * (code_size.h + elts_size.h)) # guard
-        # this length seems missing from the doc. make a choice: space between
-        # beginning of the first digit and the first bar:
-        shift = .075
+        full_size = EAN13Data.full_size
+        # then, *relative* dimensions according to pyplot logic
+        code_size = EAN13Data.code_size / full_size
+        elts_size = EAN13Data.elts_size / full_size
+        elt_size = EAN13Data.elt_size / full_size
+        label_size = EAN13Data.label_size / full_size
+        guard_size = EAN13Data.guard_size / full_size
+        before_white = EAN13Data.before_white / full_size.w
+        after_white = EAN13Data.after_white / full_size.w
+        shift = EAN13Data.shift / full_size.w
         # open new blank figure
         fig, ax = plt.subplots()
-        fig.set_size_inches(full_size)
+        # watch out! the final .svg file size will be *rounded* pts
+        # so yeah, we'll basically get a small size error on the overall
+        # file size -_-"
+        fig.set_size_inches(full_size / XY.inch)
         plt.axis('off')
-        # arf, yes, bring all these back to [0, 1]^2
-        code_size /= full_size
-        elts_size /= full_size
-        elt_size /= full_size
-        label_size /= full_size
-        before_white /= full_size.w
-        after_white /= full_size.w
         # read code and prepare all bars :)
         # draw one full-code-range series of small bars (guards included)
         # then superimpose taller guards bars :P
@@ -430,30 +448,31 @@ class EAN13(object):
                     ec=None, fc=color)
             ax.add_patch(bar)
             x += width
-        # t = TextPath(.5 * XY(1, 1), self.id, size=.1)
-        # for p in t.to_polygons():
-            # p /= full_size
-            # ax.add_patch(mpatches.Polygon(p, fc='green'))
         # add label, splat into several parts.. we need them now because one
-        shrink = .7 # shrink size coeff so that numbers do not crush ceiling
-        spacing = .0082 # horizontal spacing of digits as a `height` factor
+        shrink = .73 # shrink size coeff so that numbers do not crush ceiling
+        spacing = .0079 # horizontal spacing of digits as a `height` factor
         first, second, third = self.id_dashed.split('-')
-        height = label_size.h * full_size.h * inch_2_pt * shrink
-        plt.text(before_white, y, first, color='black', size=height)
+        height = label_size.h * full_size.h * shrink / XY.pt
+        # center between elements and the floor
+        y = .5 * (code_size.h - elts_size.h)
+        plt.text(before_white, y, first, color='black', size=height,
+                verticalalignment='center')
         normal_guard_length = len(EAN13Data.elements['n'])
         x = before_white + shift + normal_guard_length * bar_width
         for digit in second:
-            plt.text(x, y, digit, color='black', size=height)
+            plt.text(x, y, digit, color='black', size=height,
+                verticalalignment='center')
             x += height * spacing
         x = before_white + shift + elts_size.w - normal_guard_length*bar_width
         for digit in reversed(third):
-            plt.text(x, y, digit, color='black', size=height, ha='right')
+            plt.text(x, y, digit, color='black', size=height, ha='right',
+                verticalalignment='center')
             x -= height * spacing
         # ah.. there's a kind of `>` at the end..
         last = '>'
         x = before_white + shift + elts_size.w + bar_width
         plt.text(x, y, last, color='black', size=height, ha='left')
-        plt.savefig(self.id + '.pdf')
+        plt.savefig(self.id + '.svg')
         plt.close()
 
     @staticmethod
@@ -511,8 +530,33 @@ class EAN13(object):
 
 
 self = EAN13(978294019961)
-self.draw()
+self = EAN13(278294019961)
+# self.draw()
 
-for i in range(100):
-    print(EAN13.generate('041'))
+# for i in range(100):
+    # print(EAN13.generate('041'))
+
+# a nice layout with many bars?
+files = ['9782940199617.svg' if i % 2 == 0 else '2782940199614.svg'
+        for i in range(24)]
+
+# A4
+sticker_size = EAN13Data.full_size
+sheet_size = WH(210., 297.) * XY.mm
+# how many codes on one sheet?
+n_codes = sheet_size / sticker_size
+n_codes = np.floor(n_codes).astype(int)
+# here starts the assembling using svgutils
+panels = [] # according to sc logic
+stickers = iter(files)
+# iterate until they are all consumed
+try:
+    for i in range(n_codes.w):
+        for j in range(n_codes.h):
+            panels.append(sc.Panel(sc.SVG(next(stickers))
+                .scale(1.).move(i * sticker_size.w,
+                                j * sticker_size.h)))
+except StopIteration:
+    pass # no worries, that was expected
+sc.Figure(sheet_size.w, sheet_size.h, *panels).save("compose.svg")
 

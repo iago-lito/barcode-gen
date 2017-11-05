@@ -19,6 +19,18 @@ import numpy.random as rd
 from itertools import groupby
 # to compose layout from many barcode files
 import svgutils.compose as sc
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPDF
+from PyPDF2 import PdfFileWriter, PdfFileReader
+# for handling temporary files
+import os
+
+def append_pdf(input,output):
+    """concatenate pdf's together
+    https://stackoverflow.com/a/3444735/3719101
+    """
+    [output.addPage(input.getPage(page_num))
+            for page_num in range(input.numPages)]
 
 def loopstep(start, digits='0123456789'):
     """Iterate forever on all digit combinations of fixed length
@@ -540,9 +552,10 @@ self.draw()
 
 # a nice layout with many bars?
 files = ['9782940199617.svg' if i % 2 == 0 else '2782940199614.svg'
-        for i in range(24)]
+        for i in range(50)]
 
 # A4
+filename = 'stickers'
 sticker_size = EAN13Data.full_size
 sheet_size = WH(210., 297.) * XY.mm
 # how many codes on one sheet?
@@ -551,6 +564,7 @@ n_stickers = np.floor(n_stickers).astype(int)
 # here starts the assembling using svgutils
 stickers_per_sheet = n_stickers.w * n_stickers.h
 n_sheets = ceil(len(files) / stickers_per_sheet)
+sheets = [] # store produce .pdf sheets filenames here
 # iterate until they are all consumed
 stickers = iter(files)
 for n in range(n_sheets):
@@ -563,7 +577,24 @@ for n in range(n_sheets):
                                     j * sticker_size.h)))
     except StopIteration:
         pass # no more stickers to print
-    sc.Figure(sheet_size.w, sheet_size.h, *panels) \
-            .save("compose{}.svg" \
-                  .format('-' + str(n + 1) if n_sheets > 1 else ''))
+    sheetname = "stickers" + ('-' + str(n + 1) if n_sheets > 1 else '')
+    ssvg = sheetname + '.svg'
+    spdf = sheetname + '.pdf'
+    sc.Figure(sheet_size.w, sheet_size.h, *panels).save(ssvg)
+    # convert to .pdf
+    renderPDF.drawToFile(svg2rlg(ssvg), spdf)
+    # remove .svg file
+    os.remove(ssvg)
+    # remember this other temp file
+    sheets.append(spdf)
+
+# bring all sheets together into pdf pages
+if n_sheets > 1:
+    final = PdfFileWriter()
+    for sheet in sheets:
+        append_pdf(PdfFileReader(sheet), final)
+    final.write(open(filename + '.pdf', 'wb'))
+    # so we can now supress them
+    while sheets:
+        os.remove(sheets.pop())
 

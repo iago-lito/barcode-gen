@@ -4,10 +4,8 @@ the roadmap and the intent:
 
 ## bugs
 
-This yields pyplot warnings for some reason:
-
-    for i in range(100):
-        EAN13.generate('041').draw()
+pyplot warnings when drawing in interactive mode, not much I can do quickly
+    https://stackoverflow.com/questions/22055569/
 
 
 ## roadmap

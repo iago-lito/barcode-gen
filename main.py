@@ -408,8 +408,10 @@ class EAN13(object):
         """
         return '-'.join(self.elements)
 
-    def draw(self):
-        """export a .pdf version of the code :)
+    def draw(self, filename=None):
+        """export a pyplot version of the code :)
+        pick your extension with `filename`, or it'll be the
+        <code-id>.pdf by default.
         """
 
         full_size = EAN13Data.full_size
@@ -485,7 +487,9 @@ class EAN13(object):
         last = '>'
         x = before_white + shift + elts_size.w + bar_width
         plt.text(x, y, last, color='black', size=height, ha='left')
-        plt.savefig(self.id + '.svg')
+        if not filename:
+            filename = self.id + '.pdf'
+        plt.savefig(filename)
         plt.close()
 
     @staticmethod
@@ -541,60 +545,71 @@ class EAN13(object):
                 raise Exception("Database is full!")
         return EAN13(prefix + rand)
 
+    @staticmethod
+    def layout(codes, filename):
+        """export pdf A4 pages filled with these barcodes, so that they
+        can be printed as stickers
+        filename will prefix temporary files produced and removed during
+        the process, it shouldn't have any extension
+
+        TODO: I guess it's possible achieving this without creating so
+        many intermediate files. Try to get rid of them ;)
+        """
+        # A4
+        sheet_size = WH(210., 297.) * XY.mm
+        sticker_size = EAN13Data.full_size
+        # so how many codes fit on one sheet?
+        n_stickers = sheet_size / sticker_size
+        n_stickers = np.floor(n_stickers).astype(int)
+        stickers_per_sheet = n_stickers.w * n_stickers.h
+        # so how many sheets do we need?
+        n_sheets = ceil(len(codes) / stickers_per_sheet)
+        sheets = [] # store produced .pdf sheets filenames here
+        # iterate until they are all consumed
+        stickers = iter(codes)
+        for n in range(n_sheets):
+            panels = [] # according to sc logic
+            try:
+                for i in range(n_stickers.w):
+                    for j in range(n_stickers.h):
+                        # export this code as svg temp file
+                        code = next(stickers)
+                        tpfile = code.id + '.svg'
+                        code.draw(tpfile)
+                        panels.append(sc.Panel(sc.SVG(tpfile)
+                            .scale(1.).move(i * sticker_size.w,
+                                            j * sticker_size.h)))
+                        # cleanup
+                        os.remove(tpfile)
+            except StopIteration:
+                pass # no more stickers to print
+            sheetname = filename + ('-' + str(n + 1) if n_sheets > 1 else '')
+            ssvg = sheetname + '.svg'
+            spdf = sheetname + '.pdf'
+            sc.Figure(sheet_size.w, sheet_size.h, *panels).save(ssvg)
+            # convert to .pdf
+            renderPDF.drawToFile(svg2rlg(ssvg), spdf)
+            # remove .svg file
+            os.remove(ssvg)
+            # remember this other temp file
+            sheets.append(spdf)
+
+        # bring all sheets together into pdf pages
+        if n_sheets > 1:
+            final = PdfFileWriter()
+            for sheet in sheets:
+                append_pdf(PdfFileReader(sheet), final)
+            final.write(open(filename + '.pdf', 'wb'))
+            # so we can now supress them
+            while sheets:
+                os.remove(sheets.pop())
+
 
 self = EAN13(978294019961)
-self.draw()
-self = EAN13(278294019961)
-self.draw()
+# self.draw()
 
-# for i in range(100):
-    # print(EAN13.generate('041'))
-
-# a nice layout with many bars?
-files = ['9782940199617.svg' if i % 2 == 0 else '2782940199614.svg'
-        for i in range(50)]
-
-# A4
-filename = 'stickers'
-sticker_size = EAN13Data.full_size
-sheet_size = WH(210., 297.) * XY.mm
-# how many codes on one sheet?
-n_stickers = sheet_size / sticker_size
-n_stickers = np.floor(n_stickers).astype(int)
-# here starts the assembling using svgutils
-stickers_per_sheet = n_stickers.w * n_stickers.h
-n_sheets = ceil(len(files) / stickers_per_sheet)
-sheets = [] # store produce .pdf sheets filenames here
-# iterate until they are all consumed
-stickers = iter(files)
-for n in range(n_sheets):
-    panels = [] # according to sc logic
-    try:
-        for i in range(n_stickers.w):
-            for j in range(n_stickers.h):
-                panels.append(sc.Panel(sc.SVG(next(stickers))
-                    .scale(1.).move(i * sticker_size.w,
-                                    j * sticker_size.h)))
-    except StopIteration:
-        pass # no more stickers to print
-    sheetname = "stickers" + ('-' + str(n + 1) if n_sheets > 1 else '')
-    ssvg = sheetname + '.svg'
-    spdf = sheetname + '.pdf'
-    sc.Figure(sheet_size.w, sheet_size.h, *panels).save(ssvg)
-    # convert to .pdf
-    renderPDF.drawToFile(svg2rlg(ssvg), spdf)
-    # remove .svg file
-    os.remove(ssvg)
-    # remember this other temp file
-    sheets.append(spdf)
-
-# bring all sheets together into pdf pages
-if n_sheets > 1:
-    final = PdfFileWriter()
-    for sheet in sheets:
-        append_pdf(PdfFileReader(sheet), final)
-    final.write(open(filename + '.pdf', 'wb'))
-    # so we can now supress them
-    while sheets:
-        os.remove(sheets.pop())
+# prepare random stickers to be printed
+# TODO: build them directly with no duplicates!
+stickers = [EAN13.generate('041') for _ in range(60)]
+EAN13.layout(stickers, 'stickers')
 

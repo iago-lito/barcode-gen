@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
 from matplotlib.textpath import TextPath
+from math import ceil
 import numpy as np
 import numpy.random as rd
 # for grouping successive similar bits together
@@ -530,8 +531,9 @@ class EAN13(object):
 
 
 self = EAN13(978294019961)
+self.draw()
 self = EAN13(278294019961)
-# self.draw()
+self.draw()
 
 # for i in range(100):
     # print(EAN13.generate('041'))
@@ -544,19 +546,24 @@ files = ['9782940199617.svg' if i % 2 == 0 else '2782940199614.svg'
 sticker_size = EAN13Data.full_size
 sheet_size = WH(210., 297.) * XY.mm
 # how many codes on one sheet?
-n_codes = sheet_size / sticker_size
-n_codes = np.floor(n_codes).astype(int)
+n_stickers = sheet_size / sticker_size
+n_stickers = np.floor(n_stickers).astype(int)
 # here starts the assembling using svgutils
-panels = [] # according to sc logic
-stickers = iter(files)
+stickers_per_sheet = n_stickers.w * n_stickers.h
+n_sheets = ceil(len(files) / stickers_per_sheet)
 # iterate until they are all consumed
-try:
-    for i in range(n_codes.w):
-        for j in range(n_codes.h):
-            panels.append(sc.Panel(sc.SVG(next(stickers))
-                .scale(1.).move(i * sticker_size.w,
-                                j * sticker_size.h)))
-except StopIteration:
-    pass # no worries, that was expected
-sc.Figure(sheet_size.w, sheet_size.h, *panels).save("compose.svg")
+stickers = iter(files)
+for n in range(n_sheets):
+    panels = [] # according to sc logic
+    try:
+        for i in range(n_stickers.w):
+            for j in range(n_stickers.h):
+                panels.append(sc.Panel(sc.SVG(next(stickers))
+                    .scale(1.).move(i * sticker_size.w,
+                                    j * sticker_size.h)))
+    except StopIteration:
+        pass # no more stickers to print
+    sc.Figure(sheet_size.w, sheet_size.h, *panels) \
+            .save("compose{}.svg" \
+                  .format('-' + str(n + 1) if n_sheets > 1 else ''))
 

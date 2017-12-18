@@ -3,10 +3,7 @@ Let's first use pseudo-"binary" codes stored and manipulated as python
 strings for simplicity.
 """
 
-# to subclass `str` in a lazy way
-# https://stackoverflow.com/questions/46868085/
-from collections import UserString
-# to draw and export barcodes
+# to draw and export pdf barcodes
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
@@ -14,10 +11,13 @@ from matplotlib.textpath import TextPath
 from math import ceil
 import numpy as np
 import numpy.random as rd
+# to subclass `str` in a lazy way
+# https://stackoverflow.com/questions/46868085/
+from collections import UserString
 # for grouping successive similar bits together
 # https://stackoverflow.com/a/34444401/3719101
 from itertools import groupby
-# to compose layout from many barcode files
+# to compose pdf layout from many barcode files
 import svgutils.compose as sc
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPDF
@@ -605,11 +605,16 @@ class EAN13(object):
                 os.remove(sheets.pop())
 
 
-self = EAN13(978294019961)
-# self.draw()
+# build a code with additionnal checksum digit
+code = EAN13(978294019961)
+# export pdf
+code.draw()
 
 # prepare random stickers to be printed
-# TODO: build them directly with no duplicates!
-stickers = [EAN13.generate('041') for _ in range(60)]
-EAN13.layout(stickers, 'stickers')
+# TODO: build them directly with no duplicates
+# guard it because it's a bit long and still experimental
+output_many_stickers = False
+if output_many_stickers:
+    stickers = [EAN13.generate('041') for _ in range(60)]
+    EAN13.layout(stickers, 'stickers')
 

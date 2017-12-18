@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 """Start developping here as in a sandbox.
 Let's first use pseudo-"binary" codes stored and manipulated as python
 strings for simplicity.
@@ -24,6 +26,8 @@ from reportlab.graphics import renderPDF
 from PyPDF2 import PdfFileWriter, PdfFileReader
 # for handling temporary files
 import os
+# for processing command line arguments
+import sys
 
 def append_pdf(input,output):
     """concatenate pdf's together
@@ -605,16 +609,38 @@ class EAN13(object):
                 os.remove(sheets.pop())
 
 
-# build a code with additionnal checksum digit
-code = EAN13(978294019961)
-# export pdf
-code.draw()
+if __name__ == "main":
+    # Sandbox to playaround
 
-# prepare random stickers to be printed
-# TODO: build them directly with no duplicates
-# guard it because it's a bit long and still experimental
-output_many_stickers = False
-if output_many_stickers:
-    stickers = [EAN13.generate('041') for _ in range(60)]
-    EAN13.layout(stickers, 'stickers')
+    # build a code with additionnal checksum digit
+    code = EAN13(978294019961)
+    # export pdf
+    code.draw()
+
+    # prepare random stickers to be printed
+    # TODO: build them directly with no duplicates
+    # guard it because it's a bit long and still experimental
+    output_many_stickers = False
+    if output_many_stickers:
+        stickers = [EAN13.generate('041') for _ in range(60)]
+        EAN13.layout(stickers, 'stickers')
+
+else:
+    # process command line arguments like barcodes to generate
+    args = sys.argv[1:]
+    # For now, they should all be valid codes
+    if args:
+        for code in args:
+            print("processing {}".format(code))
+            code = EAN13(code)
+            print("built: {}".format(code))
+            print("exporting..")
+            code.draw()
+            print()
+        print("done.".format())
+    else:
+        print("no codes given. Don't hesitate and provide "
+              "12-digits long space-separated strings.")
+        print("Example:")
+        print("./main.py 123456789123 987654321654")
 
